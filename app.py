@@ -12,7 +12,7 @@ st.caption("利用大语言模型穿透市场噪音，提取核心投资逻辑")
 with st.sidebar:
     st.header("设置")
     api_key = st.text_input("输入 OpenAI API Key", type="password")
-    model_choice = st.selectbox("选择模型", ["gpt-4o", "gpt-3.5-turbo"])
+    model_choice = st.selectbox("选择模型", ["deepseek-chat"])
 
 # 主界面布局
 col1, col2 = st.columns([1, 1])
