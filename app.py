@@ -29,7 +29,7 @@ with col2:
             st.error("请在左侧侧边栏输入 API Key！")
         else:
             try:
-                client = openai.OpenAI(api_key=api_key)
+                client = openai.OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
                 with st.spinner('AI 正在深度思考中...'):
                     prompt = f"你是一名资深量化分析师，分析以下新闻，输出JSON格式结果：subject(受影响主体), sentiment(看多/看空/中性), logic(一句话投资逻辑), impact_score(影响力1-10)。新闻内容：{news_input}"
                     
