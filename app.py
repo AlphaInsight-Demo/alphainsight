@@ -3,130 +3,131 @@ import openai
 import json
 from tavily import TavilyClient
 
-# 页面配置
-st.set_page_config(page_title="AlphaInsight Pro", layout="wide", page_icon="🌐")
+# --- 1. 页面配置与自定义样式 ---
+st.set_page_config(page_title="AlphaInsight Pro", layout="wide", page_icon="🚀")
 
-# 1. 从 Secrets 读取 Key
+# 自定义 CSS：解决字号和背景问题
+st.markdown("""
+    <style>
+    /* 逻辑分析框的背景样式 */
+    .logic-container {
+        background-color: #f0f7ff;
+        padding: 25px;
+        border-radius: 15px;
+        border-left: 5px solid #1e88e5;
+        color: #1a1a1a;
+        line-height: 1.7;
+    }
+    /* 受影响标的的文字样式 */
+    .target-tag {
+        display: inline-block;
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        padding: 6px 15px;
+        border-radius: 20px;
+        font-size: 20px !important; /* 这里调大字号 */
+        font-weight: bold;
+        margin-right: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #c8e6c9;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. 密钥读取 ---
 deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
 tavily_key = st.secrets.get("TAVILY_API_KEY", "")
 
-# --- 核心功能函数：专业级联网搜索 ---
 def fetch_latest_news_pro(keyword):
-    """通过 Tavily 搜索专业财经情报"""
-    if not tavily_key:
-        return "ERROR_NO_KEY: 请在 Secrets 中配置 TAVILY_API_KEY"
-    
+    if not tavily_key: return "ERROR_NO_KEY"
     try:
         tavily = TavilyClient(api_key=tavily_key)
-        # search_depth="advanced" 可以搜得更深，针对金融分析非常有用
-        response = tavily.search(query=keyword, search_depth="advanced", max_results=5)
-        
+        response = tavily.search(query=keyword, search_depth="basic", max_results=3)
         results = response.get('results', [])
-        if not results:
-            return "未搜寻到相关近期新闻。"
-        
-        news_context = ""
+        if not results: return "未搜寻到相关近期新闻。"
+        context = ""
         for i, r in enumerate(results):
-            # Tavily 会自动提取网页摘要 (content)
-            news_context += f"情报{i+1}: {r['title']}\n摘要: {r['content']}\n\n"
-        return news_context
+            context += f"【情报{i+1}】: {r['title']}\n内容: {r['content']}\n\n"
+        return context
     except Exception as e:
         return f"搜索出错: {str(e)}"
 
-# 页面标题
+# --- 3. UI 布局 ---
 st.title("🚀 AlphaInsight Pro: 全球情报实时分析")
 st.markdown("---")
 
-# 侧边栏
 with st.sidebar:
     st.header("⚙️ 系统设置")
     user_key = st.text_input("DeepSeek API Key", value=deepseek_key, type="password")
-    st.info("💡 当前已启用专业级 Tavily 搜索接口，稳定性提升 100%。")
 
-# 主界面布局
 col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
-    st.subheader("📥 第一步：获取分析素材")
+    st.subheader("📥 获取分析素材")
     tab1, tab2 = st.tabs(["🔍 自动采集", "📄 手动粘贴"])
-    
     with tab1:
-        search_keyword = st.text_input("输入关键词 (如：公司名、板块、宏观事件)", placeholder="例如：美伊战争、英伟达财报...")
+        search_keyword = st.text_input("输入关键词", placeholder="例如：美伊战争、英伟达财报...")
         analyze_search_btn = st.button("全网搜寻并分析", type="primary", use_container_width=True)
-    
     with tab2:
-        news_input = st.text_area("在此粘贴原始文本：", height=300, placeholder="粘贴新闻文本...")
+        news_input = st.text_area("在此粘贴文本：", height=300)
         analyze_text_btn = st.button("直接分析上方文本", use_container_width=True)
 
-# 统一分析逻辑
+# 触发逻辑
 final_context = ""
-trigger = False
-
 if analyze_search_btn and search_keyword:
-    with st.spinner(f'🚀 正在调用全球情报网搜寻 "{search_keyword}"...'):
-        res = fetch_latest_news_pro(search_keyword)
-        if "ERROR_NO_KEY" in res:
-            st.error("❌ 尚未配置 TAVILY_API_KEY，请检查 Secrets。")
-        elif "搜索出错" in res:
-            st.error(f"❌ {res}")
-        else:
-            final_context = res
-            trigger = True
+    with st.status("🚀 正在采集情报...", expanded=False) as status:
+        final_context = fetch_latest_news_pro(search_keyword)
+        status.update(label="采集完成！", state="complete")
 elif analyze_text_btn and news_input:
     final_context = news_input
-    trigger = True
 
 with col_right:
-    st.subheader("📋 第二步：结构化分析报告")
+    st.subheader("📋 结构化分析报告")
     
-    if trigger:
+    if final_context:
         try:
             client = openai.OpenAI(api_key=user_key, base_url="https://api.deepseek.com")
-            with st.spinner('AI 正在深度研判中...'):
-                prompt = f"""
-                你是一名顶级金融分析师。请分析以下新闻情报，并以 JSON 格式输出报告。
-                要求：
-                1. 'logic' 字段必须使用 Markdown 格式，必须包含换行符(\\n\\n)分段。
-                2. 重要结论请使用 **加粗**。
-                
-                输出格式示例：
-                {{
-                    "subject": ["主体1", "主体2"],
-                    "sentiment": "看多/看空/中性",
-                    "logic": "**1. 核心影响因素**\\n\\n具体描述...\\n\\n**2. 产业链传导**\\n\\n具体描述...",
-                    "impact_score": 8,
-                    "risk_tip": "风险提示"
-                }}
-                情报内容： {final_context}
-                """
-
-                response = client.chat.completions.create(
+            
+            # 1. 先让 AI 提取标的（不流式，直接出，为了大字号排版）
+            with st.spinner('提取核心标的...'):
+                tag_res = client.chat.completions.create(
                     model="deepseek-chat",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={ "type": "json_object" }
+                    messages=[{"role": "user", "content": f"请从以下内容提取受影响的具体资产或主体名称，仅返回名称，逗号分隔：{final_context}"}]
                 )
-                result = json.loads(response.choices[0].message.content)
+                tags = tag_res.choices[0].message.content.split(',')
                 
-                # --- 漂亮的展示部分 ---
-                m1, m2 = st.columns(2)
-                with m1:
-                    color = "🔴" if "空" in result.get('sentiment', '') else "🟢"
-                    st.metric("综合情绪", f"{color} {result.get('sentiment')}")
-                with m2:
-                    st.metric("影响力评分", f"{result.get('impact_score')} / 10")
-                
-                st.divider()
-                st.markdown("**🎯 受影响标的：**")
-                st.write(", ".join([f"`{s}`" for s in result.get('subject', [])]))
+                st.markdown("**🎯 核心受影响标的：**")
+                tag_html = ""
+                for t in tags:
+                    tag_html += f'<span class="target-tag">{t.strip()}</span>'
+                st.markdown(tag_html, unsafe_allow_html=True)
+            
+            st.divider()
 
-                st.markdown("**💡 深度逻辑透视：**")
-                st.markdown(result.get('logic', ''))
+            # 2. 流式生成深度逻辑（带背景色）
+            st.markdown("**💡 深度逻辑透视：**")
+            logic_placeholder = st.empty()
+            
+            prompt = f"你是一名资深金融分析师。请针对以下内容，直接输出专业深度分析。要求分段、使用1.2.3.序号。情报内容：{final_context}"
+            
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": prompt}],
+                stream=True
+            )
+            
+            full_response = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                    # 动态包裹在带背景的 div 中
+                    logic_placeholder.markdown(f'<div class="logic-container">{full_response}▌</div>', unsafe_allow_html=True)
+            
+            # 最终渲染（去掉光标）
+            logic_placeholder.markdown(f'<div class="logic-container">{full_response}</div>', unsafe_allow_html=True)
+            st.success("✅ 研判任务已执行完毕")
 
-                st.divider()
-                st.markdown("**⚠️ 风险提示：**")
-                st.warning(result.get('risk_tip', '谨慎操作'))
-                
         except Exception as e:
             st.error(f"分析出错: {str(e)}")
     else:
-        st.info("💡 建议使用『自动采集』获取全球最新情报。")
+        st.info("💡 等待数据输入...")
