@@ -1,50 +1,158 @@
 import streamlit as st
 from openai import OpenAI
 import json
-from styles import get_custom_css
 
-# --- 1. 配置 ---
+# --- 1. 强力 CSS 注入 (直接写在 app.py 确保 100% 加载) ---
+def inject_super_css():
+    st.markdown("""
+    <style>
+    /* 强制全局深色背景 */
+    [data-testid="stAppViewContainer"], .main, .stApp {
+        background-color: #0E1117 !important;
+        color: #FFFFFF !important;
+    }
+    
+    /* 顶部导航和线条隐藏 */
+    header, [data-testid="stHeader"] { visibility: hidden; }
+
+    /* 侧边栏样式 */
+    [data-testid="stSidebar"] {
+        background-color: #161B22 !important;
+        border-right: 1px solid #30363D;
+    }
+
+    /* 自定义 Bento Box 指标卡片 */
+    .bento-container {
+        display: flex;
+        flex-direction: row;
+        gap: 15px;
+        margin: 20px 0;
+        width: 100%;
+    }
+    
+    .bento-card {
+        background: #1C2128;
+        border: 1px solid #30363D;
+        border-radius: 12px;
+        padding: 20px;
+        flex: 1;
+        min-width: 150px;
+        transition: all 0.3s ease;
+    }
+    
+    .bento-card:hover {
+        border: 1px solid #00FFA3;
+        box-shadow: 0 0 15px rgba(0, 255, 163, 0.1);
+    }
+
+    .bento-label {
+        color: #8B949E;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+    }
+
+    .bento-value {
+        color: #F0F6FC;
+        font-size: 24px;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* 信号卡片样式 */
+    .signal-card {
+        background: #161B22;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border: 1px solid #30363D;
+    }
+    .bullish-border { border-left: 4px solid #00FFA3; }
+    .bearish-border { border-left: 4px solid #FF4B4B; }
+    
+    .summary-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: #F0F6FC;
+        margin-bottom: 10px;
+    }
+
+    .logic-box {
+        background: #0D1117;
+        padding: 12px;
+        border-radius: 6px;
+        color: #C9D1D9;
+        font-size: 14px;
+        border: 1px solid #30363D;
+    }
+
+    /* 标签样式 */
+    .ticker-tag {
+        background: rgba(0, 255, 163, 0.1);
+        color: #00FFA3;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-right: 5px;
+        border: 1px solid rgba(0, 255, 163, 0.2);
+    }
+    
+    /* 修正 Tab 颜色 */
+    .stTabs [data-baseweb="tab-list"] button {
+        color: #8B949E !important;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #00FFA3 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. 页面逻辑 ---
 st.set_page_config(page_title="AlphaInsight Pro", layout="wide")
-st.markdown(get_custom_css(), unsafe_allow_html=True)
+inject_super_css()
 
-# API 密钥获取
-DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
-client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com") if DEEPSEEK_API_KEY else None
+# API 配置 (从 Secrets 获取)
+api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com") if api_key else None
 
-# --- 2. 侧边栏 ---
+# --- 3. 侧边栏 ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=50) # 一个科技感Icon
-    st.title("AlphaInsight")
+    st.title("🛡️ AlphaInsight")
     st.markdown("---")
     model_choice = st.selectbox("核心大脑", ["deepseek-chat", "deepseek-reasoner"])
-    st.success("⚡ 系统就绪")
+    st.info("💡 状态: API 已连接")
+    st.caption("开发者已充值额度")
 
-# --- 3. 顶部 Bento Box 指标 (解决看不清的问题) ---
-st.markdown(f"""
-<div class="metric-container">
-    <div class="metric-card">
-        <div class="metric-label">监测资产</div>
-        <div class="metric-value">1,248</div>
+# --- 4. 顶部横向 Bento Box ---
+# 这里使用 HTML 拼接，确保它一定是横向的
+st.markdown("""
+<div class="bento-container">
+    <div class="bento-card">
+        <div class="bento-label">监测资产</div>
+        <div class="bento-value">1,248</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">看多信号</div>
-        <div class="metric-value" style="color: #00FFA3;">32</div>
+    <div class="bento-card">
+        <div class="bento-label">多头信号</div>
+        <div class="bento-value" style="color:#00FFA3;">32</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">看空信号</div>
-        <div class="metric-value" style="color: #FF4B4B;">14</div>
+    <div class="bento-card">
+        <div class="bento-label">空头信号</div>
+        <div class="bento-value" style="color:#FF4B4B;">14</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">AI 信心值</div>
-        <div class="metric-value">98.2%</div>
+    <div class="bento-card">
+        <div class="bento-label">AI 信心指数</div>
+        <div class="bento-value">98.2%</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- 4. AI 处理函数 ---
+st.write("") # 留白
+
+# --- 5. AI 分析函数 ---
 def analyze_news(text):
     if not client: return None
-    prompt = f"作为高级分析师，将此新闻转化为投资信号，严格按JSON输出: summary, sentiment(Bullish/Bearish/Neutral), logic, tickers, score(1-10). 内容: {text}"
+    prompt = f"分析此新闻，输出 JSON: summary, sentiment(Bullish/Bearish), logic, tickers, score(1-10). 内容: {text}"
     try:
         response = client.chat.completions.create(
             model=model_choice,
@@ -54,41 +162,38 @@ def analyze_news(text):
         return json.loads(response.choices[0].message.content)
     except: return None
 
-# --- 5. 主内容区 ---
+# --- 6. 主内容区 ---
 tab1, tab2 = st.tabs(["🔥 实时异动流", "📄 深度研报解析"])
 
 with tab1:
     mock_news = [
-        "Nvidia (NVDA) 宣布 Blackwell 架构 GPU 已进入全面量产阶段，市场预期大幅提升。",
-        "地缘风险导致苏伊士运河航运再次受阻，原油及航运板块可能出现短期异动。",
-        "美联储官员暗示下月可能暂停降息，美债收益率攀升至三个月高点。"
+        "英伟达(NVDA)Blackwell芯片良率提升，预计Q4出货量将超出此前预期30%。",
+        "由于地缘冲突加剧，国际油价大幅跳水，WTI原油跌破70美元大关。",
+        "OpenAI发布新款模型，对算力需求暴增，电力能源股近期获机构大量加仓。"
     ]
     
     for news in mock_news:
         with st.expander(f"📌 {news[:50]}...", expanded=False):
-            if st.button("运行 AI 扫描", key=news[:20]):
-                res = analyze_news(news)
-                if res:
-                    border_class = f"{res['sentiment'].lower()}-border"
-                    st.markdown(f"""
-                    <div class="alpha-card {border_class}">
-                        <div class="summary-text">{res['summary']}</div>
-                        <div class="logic-box"><strong>分析师逻辑：</strong>{res['logic']}</div>
-                        <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                {" ".join([f'<span class="ticker-tag">{t}</span>' for t in res['tickers']])}
+            if st.button("运行诊断", key=news[:20]):
+                with st.spinner("AI 正在推理..."):
+                    res = analyze_news(news)
+                    if res:
+                        b_class = "bullish-border" if res['sentiment'] == "Bullish" else "bearish-border"
+                        st.markdown(f"""
+                        <div class="signal-card {b_class}">
+                            <div class="summary-text">{res['summary']}</div>
+                            <div class="logic-box"><strong>分析推导：</strong>{res['logic']}</div>
+                            <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>{" ".join([f'<span class="ticker-tag">{t}</span>' for t in res['tickers']])}</div>
+                                <div style="color:#8B949E; font-size:12px;">影响力评分: {res['score']}/10</div>
                             </div>
-                            <div style="color:#8E9AAF; font-weight:bold;">评分: {res['score']}/10</div>
                         </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
 with tab2:
-    text_input = st.text_area("粘贴需要分析的金融长文...", height=300)
-    if st.button("生成结构化深度报告"):
-        if text_input:
-            res = analyze_news(text_input)
-            if res:
-                st.json(res)
+    text_input = st.text_area("粘贴长文分析...", height=200)
+    if st.button("生成报告"):
+        res = analyze_news(text_input)
+        if res: st.json(res)
 
-st.markdown("<br><center style='color:#4A5568;'>AlphaInsight Pro © 2024 高级量化分析终端</center>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center; color:#484F58; padding:20px;'>AlphaInsight Pro | Quant Terminal v1.1</div>", unsafe_allow_html=True)
