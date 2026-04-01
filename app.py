@@ -13,12 +13,11 @@ if "DEEPSEEK_API_KEY" in st.secrets:
 else:
     default_api_key = ""
 
-# --- 核心功能函数：联网搜索（增加重试和错误处理） ---
+# --- 核心功能函数：联网搜索 ---
 def fetch_latest_news(keyword):
     """通过 DuckDuckGo 搜索最近的财经新闻"""
     try:
         with DDGS() as ddgs:
-            # 增加 region 参数尝试获取更精准的中文结果
             results = [r for r in ddgs.news(keyword, region="cn-zh", safesearch="off", timelimit="d", max_results=5)]
         
         if not results:
@@ -30,7 +29,7 @@ def fetch_latest_news(keyword):
         return news_context
     except Exception as e:
         if "Ratelimit" in str(e):
-            return "ERROR_LIMIT: 搜索请求过于频繁，被搜索引擎暂时限流，请1分钟后再试，或改用手动粘贴功能。"
+            return "ERROR_LIMIT"
         return f"搜索出错: {str(e)}"
 
 # 页面标题
@@ -41,6 +40,7 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ 系统设置")
     user_key = st.text_input("DeepSeek API Key", value=default_api_key, type="password")
+    st.info("💡 提示：如果自动采集失败，请尝试手动粘贴新闻文本。")
 
 # 主界面布局
 col_left, col_right = st.columns([1, 1.2], gap="large")
@@ -50,11 +50,11 @@ with col_left:
     tab1, tab2 = st.tabs(["🔍 自动采集", "📄 手动粘贴"])
     
     with tab1:
-        search_keyword = st.text_input("输入关键词 (如：公司名、板块、宏观事件)", placeholder="例如：美伊战争、英伟达财报...")
+        search_keyword = st.text_input("输入关键词 (如：公司名、板块、宏观事件)", placeholder="例如：半导体、英伟达财报...")
         analyze_search_btn = st.button("全网搜寻并分析", type="primary", use_container_width=True)
     
     with tab2:
-        news_input = st.text_area("在此粘贴原始文本：", height=250)
+        news_input = st.text_area("在此粘贴原始文本：", height=300, placeholder="粘贴路透社、彭博社或其他新闻...")
         analyze_text_btn = st.button("直接分析上方文本", use_container_width=True)
 
 # 统一分析逻辑
@@ -64,8 +64,8 @@ trigger = False
 if analyze_search_btn and search_keyword:
     with st.spinner(f'正在搜寻 "{search_keyword}" 的最新动态...'):
         res = fetch_latest_news(search_keyword)
-        if "ERROR_LIMIT" in res:
-            st.error(res)
+        if res == "ERROR_LIMIT":
+            st.error("⚠️ 搜索引擎流量过大，请1分钟后再试，或改用『手动粘贴』功能。")
         else:
             final_context = res
             trigger = True
@@ -79,26 +79,24 @@ with col_right:
     if trigger:
         try:
             client = openai.OpenAI(api_key=user_key, base_url="https://api.deepseek.com")
-            with st.spinner('AI 正在深度研判...'):
-                # 修改 Prompt，强制 AI 使用 Markdown 换行和排版
+            with st.spinner('AI 正在深度研判中...'):
+                # 强化 Prompt，要求 AI 必须分段
                 prompt = f"""
-                你是一名顶级金融分析师。请分析以下新闻，并以 JSON 格式输出报告。
+                你是一名资深金融分析师。请分析以下新闻情报，并以 JSON 格式输出。
+                要求：
+                1. 'logic' 字段必须使用 Markdown 格式，且必须包含换行符(\\n\\n)分段。
+                2. 重要结论请使用 **加粗**。
+                3. 请使用 1. 2. 3. 这种列表序号。
                 
-                【要求】:
-                1. logic 字段的内容必须使用 Markdown 格式。
-                2. 必须使用加粗(**关键词**)和换行符(\\n\\n)来分段。
-                3. 每条逻辑观点单独成段，不要挤在一起。
-                
-                输出 JSON 模板:
+                输出格式示例：
                 {{
-                    "subject": ["主体1", "主体2"],
-                    "sentiment": "看多/看空/中性",
-                    "logic": "**1. 核心影响因素**\\n\\n这里是详细描述...\\n\\n**2. 产业链传导**\\n\\n这里是描述...",
-                    "impact_score": 7,
-                    "risk_tip": "风险提示"
+                    "subject": ["标的1", "标的2"],
+                    "sentiment": "看多/看空",
+                    "logic": "1. **核心驱动**\\n\\n详细分析...\\n\\n2. **传导逻辑**\\n\\n详细分析...",
+                    "impact_score": 8,
+                    "risk_tip": "注意XX风险"
                 }}
-                
-                情报内容： {final_context}
+                新闻内容： {final_context}
                 """
 
                 response = client.chat.completions.create(
@@ -108,10 +106,30 @@ with col_right:
                 )
                 result = json.loads(response.choices[0].message.content)
                 
-                # 展示区
+                # --- 修复后的展示部分 ---
                 m1, m2 = st.columns(2)
                 with m1:
-                    color = "🔴" if "空" in result.get('sentiment') else "🟢"
+                    color = "🔴" if "空" in result.get('sentiment', '') else "🟢"
                     st.metric("综合情绪", f"{color} {result.get('sentiment')}")
                 with m2:
-                    st.metric("影响力", f"{result.get('impact_score')} /
+                    # 修正了之前的语法错误行
+                    st.metric("影响力评分", f"{result.get('impact_score')} / 10")
+                
+                st.divider()
+                
+                st.markdown("**🎯 受影响标的：**")
+                subjects = result.get('subject', [])
+                st.write(", ".join([f"`{s}`" for s in subjects]))
+
+                st.markdown("**💡 深度逻辑透视：**")
+                # 使用 markdown 呈现，AI 生成的 \n\n 会变成真正的换行
+                st.markdown(result.get('logic', '无分析内容'))
+
+                st.divider()
+                st.markdown("**⚠️ 风险提示：**")
+                st.warning(result.get('risk_tip', '谨慎操作'))
+                
+        except Exception as e:
+            st.error(f"分析出错: {str(e)}")
+    else:
+        st.info("💡 请在左侧选择数据来源。建议尝试『自动采集』以获取实时情报。")
